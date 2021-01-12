@@ -48,11 +48,18 @@ unc = ultidyn('unc',[1 1]);
 Delta_i=[ultidyn('Di1',[1,1]) 0; 0 ultidyn('Di2',[1,1])];
 Delta_o=[ultidyn('Do1',[1,1]) 0; 0 ultidyn('Do2',[1,1])];
 
-usys = (1 + Wo*Delta_o)*sysNom*(1 + Wi*Delta_i);
+usys = (eye(2) + Wo*Delta_o)*sysNom*(eye(2) + Wi*Delta_i);
+
+%Plot of the singular values
+figure(3)
+sigma(usys)
+
+%Plot of comparison Bode-Nominal Plant
+figure(4)
+bodemag(usys,sysNom) %Change linewidth of the nominal
+
+%% 
 
 
 
-% % Set properties of usys
-% usys.InputName = 'u';
-% usys.OutputName = 'fs';
 
