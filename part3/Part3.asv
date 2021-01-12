@@ -1,7 +1,7 @@
 %% Load data
 load('..\Assignment_Data_SC42145.mat')
 %% Define the uncertainty block
-
+%ASK
 blk=[ 1 1; 1 1; 1 1; 1 1];
 %% Part 1
 s=tf('s');
@@ -43,10 +43,10 @@ bodemag(Wi2);
 G = FWT(1:2,1:2);
 unc = ultidyn('unc',[1 1]); 
 
-Delta_i=[ultidyn('Di1',[1,1]) 0; 0 ultidyn('Di2',[1,1])];
-Delta_o=[ultidyn('Do1',[1,1]) 0; 0 ultidyn('Do2',[1,1])];
+Di=[ultidyn('Di1',[1,1]) 0; 0 ultidyn('Di2',[1,1])];
+Do=[ultidyn('Do1',[1,1]) 0; 0 ultidyn('Do2',[1,1])];
 
-usys = (eye(2) + Wo*Delta_o)*G*(eye(2) + Wi*Delta_i);
+usys = (eye(2) + Wo*Do)*G*(eye(2) + Wi*Di);
 
 %Plot of the singular values
 figure(3)
@@ -78,6 +78,7 @@ P=minreal(P);
 %Load Controller designed in PART2
 load('ControllerPart2.mat')
 
+% Remember to do comments on mu!!!!!!!!
 N=lft(P,K);
 max(real(eig(N))) %Since the larger real part is negative, N is NS.
 
@@ -91,21 +92,27 @@ Lpoles = pole(L);
 figure()
 nyquist(minreal(det_IpL));
 
+%%
+%Define frequency range
+omega=logspace(-5,3,50*61);
+
+% Define Nf
+Nf=frd(N,omega);
+
 % Check for NP
 
-% N22=N(7:8,5:6);
-% Dp=ultidyn('Dp',[2,2]);
-% 
-N_NP=lft(Dp,N22);
-sigma(N_NP)
-norm(N_NP,'inf') %The maximum value of the inf norm is 0.6843, which...
-...coincides with the largest singular value
-    
+N22=N(7:8,5:6);
+Dp=ultidyn('Dp',[2,4]);
 
-omega=logspace(-3,3,100*61);
-Nf=frd(N,omega);
-blk=[ 2 2]; % Full complex uncertainty block
-[mubnds,muinfo]=mussv(Nf(7:8,5:6),blk,'c');
+% N_NP=lft(Dp,N22);
+% sigma(N_NP)
+norm(N22,'inf') %The maximum value of the inf norm is 0.6843, which...
+...coincides with the largest singular value
+
+
+
+blk=[ 2 4]; % Full complex uncertainty block
+[mubnds,muinfo]=mussv(Nf(5:8,5:6),blk,'c');
 muNP=mubnds(:,1);
 [muNPinf, muNPw]=norm(muNP,inf);
     
@@ -113,20 +120,85 @@ muNP=mubnds(:,1);
 
 %Create a combined uncertainty matrix
 
-D=[Delta_i zeros(2); zeros(2) Delta_o];
 
-M=lft(D,N);
 
-sigma(M);
+blk=[ 1 1; 1 1;  1 1; 1 1]; % structured uncertainty
+[mubnds,muinfo]=mussv(Nf(1:4,1:4),blk,'c');
+muRS=mubnds(:,1);
+[muRSinf, muRSw]=norm(muRS,inf);
+
+ %YEZ RS :D
 %%
 % Check for RP
 
-omega=logspace(-3,3,61);
-Nf=frd(N,omega);
-blk=[ 1 1; 1 1; 1 1; 1 1; 2 2];
-[mubnds,muinfo]=mussv(Nf(1:6,1:6),blk,'c');
+
+
+blk=[ 1 1; 1 1; 1 1; 1 1; 2 4];
+% blk=[ 1 1; 1 1; 1 1; 1 1; 2 2];
+[mubnds,muinfo]=mussv(Nf,blk,'c');
 muRP=mubnds(:,1);
 [muRPinf, muRPw]=norm(muRP,inf);
+ %Nope RP :(
+ 
+ %% Part 3.2
+ 
+ % Part 1 : haha no
+ 
+ %% Part 2: D-K Iterations
+ 
+ % D-K iterations auto-tuning
+% Delta=[ultidyn('D 1',[1,1]) 0; 0 ultidyn('D 2',[1,1])];
+D=[Di zeros(2);zeros(2) Do];
+Punc=lft(D,P);
+% opt=dkitopt('FrequencyVector', omega,'DisplayWhileAutoIter','on')
+opt=dkitopt('DisplayWhileAutoIter','on');
+[Ki1,clp,dkinfo]=musyn(Punc,2,2,K);
 
+%% Manuel
 
+systemnames ='G Wp Wu Wi Wo'; % Define systems
+inputvar ='[u_d(2);u_od(2);w(2);u(2)]'; % Input generalized plant
+input_to_G= '[u_d+u]';
+input_to_Wu= '[u]';
+input_to_Wp= '[-w+G+u_od]';
+input_to_Wi= '[u]';
+input_to_Wo= '[G]';
+outputvar= '[Wi; Wo;Wp; w-G]'; % Output generalized plant
+sysoutname='P'; cleanupsysic= 'yes'; 
+sysic;
+P=minreal(P);
+
+ blk=[ 1 1; 1 1;  1 1; 1 1; 2 2];
+[K2,CL,GAM,INFO] = hinfsyn(P,2,2);
+
+for i=1:1:10
+Nf=frd(lft(P,K2),omega);
+[mubnds,muinfo]=mussv(Nf,blk,'c');
+muRP=mubnds(:,1); [muRPinf, muRPw]=norm(muRP,inf);
+[VDelta,VSigma,VLmi] = mussvextract(muinfo);
+D=VSigma.DLeft;
+dd1 = fitmagfrd((D(1,1)/D(3,3)),6);
+dd2 = fitmagfrd((D(2,2)/D(3,3)),6);
+dd3 = fitmagfrd((D(4,4)/D(6,6)),6);
+dd4 = fitmagfrd((D(5,5)/D(6,6)),6);
+Dscale=minreal(append(dd1, dd2,dd3, dd4,tf(eye(4))));
+[K2,CL,GAM2,INFO] = hinfsyn(minreal(Dscale*P*inv(Dscale)),2,2);
+end
+
+%% Time-domain Simulation
+% Extends the original system with a direct feedthrough for the V
+Kex=[K2 zeros(2,1);0 0 1];sys_fb = feedback(FWT*Kex,eye(2),[1 2],[1 2]);
+
+% System response to step in omega reference
+figure()
+step(sys_fb(1,1))
+
+% Transfer matrix from reference input to control signal output
+sys_fb_control = feedback(Kex,FWT,[1 2],[1 2 3]);
+
+% Control inputs in case of step in omega reference
+figure()
+step(sys_fb_control(1,1))
+figure()
+step(sys_fb_control(2,1))
 
