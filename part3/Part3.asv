@@ -78,7 +78,6 @@ P=minreal(P);
 %Load Controller designed in PART2
 load('ControllerPart2.mat')
 
-% Remember to do comments on mu!!!!!!!!
 N=lft(P,K);
 max(real(eig(N))) %Since the larger real part is negative, N is NS.
 
@@ -94,22 +93,21 @@ nyquist(minreal(det_IpL));
 
 % Check for NP
 
-N22=N(7:8,5:6);
-Dp=ultidyn('Dp',[2,2]);
-
-% N_NP=lft(Dp,N22);
-% sigma(N_NP)
-norm(N22,'inf') %The maximum value of the inf norm is 0.6843, which...
+% N22=N(7:8,5:6);
+% Dp=ultidyn('Dp',[2,2]);
+% 
+N_NP=lft(Dp,N22);
+sigma(N_NP)
+norm(N_NP,'inf') %The maximum value of the inf norm is 0.6843, which...
 ...coincides with the largest singular value
     
-%%
+
 omega=logspace(-3,3,100*61);
 Nf=frd(N,omega);
-blk=[ 2 4]; % Full complex uncertainty block
-[mubnds,muinfo]=mussv(Nf(5:8,5:6),blk,'c');
+blk=[ 2 2]; % Full complex uncertainty block
+[mubnds,muinfo]=mussv(Nf(7:8,5:6),blk,'c');
 muNP=mubnds(:,1);
 [muNPinf, muNPw]=norm(muNP,inf);
-%%
     
 % Check for RS
 
@@ -129,7 +127,6 @@ blk=[ 1 1; 1 1; 1 1; 1 1; 2 2];
 [mubnds,muinfo]=mussv(Nf(1:6,1:6),blk,'c');
 muRP=mubnds(:,1);
 [muRPinf, muRPw]=norm(muRP,inf);
- %No RP :(
 
 
 
