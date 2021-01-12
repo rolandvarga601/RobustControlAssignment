@@ -140,21 +140,21 @@ muRP=mubnds(:,1);
 [muRPinf, muRPw]=norm(muRP,inf);
  %Nope RP :(
  
- %% Part 3.2
+%% Part 3.2
+
+% Part 1 : haha no
  
- % Part 1 : haha no
- 
- %% Part 2: D-K Iterations
- 
- % D-K iterations auto-tuning
-% Delta=[ultidyn('D 1',[1,1]) 0; 0 ultidyn('D 2',[1,1])];
+%% Part 2: D-K Iterations
+
+% D-K iterations auto-tuning
 D=[Di zeros(2);zeros(2) Do];
 Punc=lft(D,P);
-% opt=dkitopt('FrequencyVector', omega,'DisplayWhileAutoIter','on')
-opt=dkitopt('DisplayWhileAutoIter','on');
-[Ki1,clp,dkinfo]=musyn(Punc,2,2,K);
+opt=dkitopt('FrequencyVector', omega,'DisplayWhileAutoIter','on')
+% opt=dkitopt('DisplayWhileAutoIter','on');
+[Ki1,clp,bnd,dkinfo]=dksyn(Punc,2,2,opt);
+% [Ki1,clp,dkinfo]=musyn(Punc,2,2,K);
 
-%% Manuel
+%% Manual D-K Iteration
 
 systemnames ='G Wp Wu Wi Wo'; % Define systems
 inputvar ='[u_d(2);u_od(2);w(2);u(2)]'; % Input generalized plant
@@ -177,8 +177,8 @@ Nf=frd(lft(P,K2),omega);
 muRP=mubnds(:,1); [muRPinf, muRPw]=norm(muRP,inf);
 [VDelta,VSigma,VLmi] = mussvextract(muinfo);
 D=VSigma.DLeft;
-dd1 = fitmagfrd((D(1,1)/D(3,3)),6);
-dd2 = fitmagfrd((D(2,2)/D(3,3)),6);
+dd1 = fitmagfrd((D(1,1)/D(6,6)),6);
+dd2 = fitmagfrd((D(2,2)/D(6,6)),6);
 dd3 = fitmagfrd((D(4,4)/D(6,6)),6);
 dd4 = fitmagfrd((D(5,5)/D(6,6)),6);
 Dscale=minreal(append(dd1, dd2,dd3, dd4,tf(eye(4))));

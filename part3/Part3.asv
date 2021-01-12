@@ -150,9 +150,10 @@ muRP=mubnds(:,1);
 % Delta=[ultidyn('D 1',[1,1]) 0; 0 ultidyn('D 2',[1,1])];
 D=[Di zeros(2);zeros(2) Do];
 Punc=lft(D,P);
-% opt=dkitopt('FrequencyVector', omega,'DisplayWhileAutoIter','on')
-opt=dkitopt('DisplayWhileAutoIter','on');
-[Ki1,clp,dkinfo]=musyn(Punc,2,2,K);
+opt=dkitopt('FrequencyVector', omega,'DisplayWhileAutoIter','on')
+% opt=dkitopt('DisplayWhileAutoIter','on');
+[Ki1,clp,bnd,dkinfo]=dksyn(Punc,2,2,opt);
+% [Ki1,clp,dkinfo]=musyn(Punc,2,2,K);
 
 %% Manuel
 
@@ -177,8 +178,8 @@ Nf=frd(lft(P,K2),omega);
 muRP=mubnds(:,1); [muRPinf, muRPw]=norm(muRP,inf);
 [VDelta,VSigma,VLmi] = mussvextract(muinfo);
 D=VSigma.DLeft;
-dd1 = fitmagfrd((D(1,1)/D(3,3)),6);
-dd2 = fitmagfrd((D(2,2)/D(3,3)),6);
+dd1 = fitmagfrd((D(1,1)/D(6,6)),6);
+dd2 = fitmagfrd((D(2,2)/D(6,6)),6);
 dd3 = fitmagfrd((D(4,4)/D(6,6)),6);
 dd4 = fitmagfrd((D(5,5)/D(6,6)),6);
 Dscale=minreal(append(dd1, dd2,dd3, dd4,tf(eye(4))));
@@ -187,7 +188,8 @@ end
 
 %% Time-domain Simulation
 % Extends the original system with a direct feedthrough for the V
-Kex=[K2 zeros(2,1);0 0 1];sys_fb = feedback(FWT*Kex,eye(2),[1 2],[1 2]);
+Kex=[K2 zeros(2,1);0 0 1];
+sys_fb = feedback(FWT*Kex,eye(2),[1 2],[1 2]);
 
 % System response to step in omega reference
 figure()
@@ -202,3 +204,13 @@ step(sys_fb_control(1,1))
 figure()
 step(sys_fb_control(2,1))
 
+%% Simulation - disturbance rejection
+% System response to step in the disturbance
+figure()
+step(sys_fb(1,3))
+
+% Control input response to step in the disturbance
+figure()
+step(sys_fb_control(1,3))
+figure()
+step(sys_fb_control(2,3))
