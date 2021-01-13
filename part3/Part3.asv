@@ -7,8 +7,8 @@ blk=[ 1 1; 1 1; 1 1; 1 1];
 s=tf('s');
 
 % Define Uncertainty Weights
-Wi1=((s/16*pi)+0.3)/((s/64*pi)+1);
-Wi2=((s/16*pi)+0.3)/((s/64*pi)+1);
+Wi1=((s/(16*pi))+0.3)/((s/(64*pi))+1);
+Wi2=((s/(16*pi))+0.3)/((s/(64*pi))+1);
 Wo1=(0.05*s+0.2)/(0.01*s+1);
 Wo2=(0.05*s+0.2)/(0.01*s+1);
 
@@ -63,10 +63,10 @@ systemnames ='G Wp Wu Wi Wo'; % Define systems
 inputvar ='[u_d(2);u_od(2);w(2);u(2)]'; % Input generalized plant
 input_to_G= '[u_d+u]';
 input_to_Wu= '[u]';
-input_to_Wp= '[-w+G+u_od]';
+input_to_Wp= '[w-G+u_od]';
 input_to_Wi= '[u]';
 input_to_Wo= '[G]';
-outputvar= '[Wi; Wo;Wp; Wu; w-G]'; % Output generalized plant
+outputvar= '[Wi; Wo;Wp; Wu; w-G+u_od]'; % Output generalized plant
 sysoutname='P'; cleanupsysic= 'yes'; 
 sysic;
 P=minreal(P);
@@ -79,7 +79,8 @@ P=minreal(P);
 load('ControllerPart2.mat')
 
 % Remember to do comments on mu!!!!!!!!
-N=lft(P,K);
+N=minreal(lft(P,K));
+% N=lft(K,P);
 max(real(eig(N))) %Since the larger real part is negative, N is NS.
 
 % Open loop transfer matrix
@@ -92,16 +93,18 @@ Lpoles = pole(L);
 figure()
 nyquist(minreal(det_IpL));
 
-%%
+%% Check for NP
 %Define frequency range
-omega=logspace(-5,3,50*61);
+%omega=logspace(-5,3,50*61);
+%omega=logspace(-5,3,10*61);
+omega=logspace(-3,3,1000);
 
 % Define Nf
 Nf=frd(N,omega);
 
 % Check for NP
 
-N22=N(7:8,5:6);
+N22=N(5:8,5:6);
 Dp=ultidyn('Dp',[2,4]);
 
 % N_NP=lft(Dp,N22);
@@ -110,17 +113,12 @@ norm(N22,'inf') %The maximum value of the inf norm is 0.6843, which...
 ...coincides with the largest singular value
 
 
-
 blk=[ 2 4]; % Full complex uncertainty block
 [mubnds,muinfo]=mussv(Nf(5:8,5:6),blk,'c');
 muNP=mubnds(:,1);
 [muNPinf, muNPw]=norm(muNP,inf);
     
-% Check for RS
-
-%Create a combined uncertainty matrix
-
-
+%% Check for RS
 
 blk=[ 1 1; 1 1;  1 1; 1 1]; % structured uncertainty
 [mubnds,muinfo]=mussv(Nf(1:4,1:4),blk,'c');
@@ -128,10 +126,8 @@ muRS=mubnds(:,1);
 [muRSinf, muRSw]=norm(muRS,inf);
 
  %YEZ RS :D
-%%
-% Check for RP
-
-
+ 
+%% Check for RP
 
 blk=[ 1 1; 1 1; 1 1; 1 1; 2 4];
 % blk=[ 1 1; 1 1; 1 1; 1 1; 2 2];
@@ -140,48 +136,49 @@ muRP=mubnds(:,1);
 [muRPinf, muRPw]=norm(muRP,inf);
  %Nope RP :(
  
- %% Part 3.2
+%% Part 3.2
+
+% Part 1 : haha no
  
- % Part 1 : haha no
- 
- %% Part 2: D-K Iterations
- 
- % D-K iterations auto-tuning
-% Delta=[ultidyn('D 1',[1,1]) 0; 0 ultidyn('D 2',[1,1])];
+%% Part 2: D-K Iterations
+
+% D-K iterations auto-tuning
 D=[Di zeros(2);zeros(2) Do];
 Punc=lft(D,P);
+%Punc=lft(P,D);
 opt=dkitopt('FrequencyVector', omega,'DisplayWhileAutoIter','on')
 % opt=dkitopt('DisplayWhileAutoIter','on');
 [Ki1,clp,bnd,dkinfo]=dksyn(Punc,2,2,opt);
 % [Ki1,clp,dkinfo]=musyn(Punc,2,2,K);
 
-%% Manuel
+%% Manual D-K Iteration
 
-systemnames ='G Wp Wu Wi Wo'; % Define systems
-inputvar ='[u_d(2);u_od(2);w(2);u(2)]'; % Input generalized plant
-input_to_G= '[u_d+u]';
-input_to_Wu= '[u]';
-input_to_Wp= '[-w+G+u_od]';
-input_to_Wi= '[u]';
-input_to_Wo= '[G]';
-outputvar= '[Wi; Wo;Wp; w-G]'; % Output generalized plant
-sysoutname='P'; cleanupsysic= 'yes'; 
-sysic;
-P=minreal(P);
+% systemnames ='G Wp Wu Wi Wo'; % Define systems
+% inputvar ='[u_d(2);u_od(2);w(2);u(2)]'; % Input generalized plant
+% input_to_G= '[u_d+u]';
+% input_to_Wu= '[u]';
+% input_to_Wp= '[-w+G+u_od]';
+% input_to_Wi= '[u]';
+% input_to_Wo= '[G]';
+% outputvar= '[Wi; Wo;Wp; w-G]'; % Output generalized plant
+% sysoutname='P'; cleanupsysic= 'yes'; 
+% sysic;
+% P=minreal(P);
 
- blk=[ 1 1; 1 1;  1 1; 1 1; 2 2];
+%  blk=[ 1 1; 1 1;  1 1; 1 1; 2 2];
 [K2,CL,GAM,INFO] = hinfsyn(P,2,2);
 
 for i=1:1:10
 Nf=frd(lft(P,K2),omega);
 [mubnds,muinfo]=mussv(Nf,blk,'c');
-muRP=mubnds(:,1); [muRPinf, muRPw]=norm(muRP,inf);
+muRP=mubnds(:,1);
+[muRPinf(i), muRPw]=norm(muRP,inf);
 [VDelta,VSigma,VLmi] = mussvextract(muinfo);
 D=VSigma.DLeft;
-dd1 = fitmagfrd((D(1,1)/D(6,6)),6);
-dd2 = fitmagfrd((D(2,2)/D(6,6)),6);
-dd3 = fitmagfrd((D(4,4)/D(6,6)),6);
-dd4 = fitmagfrd((D(5,5)/D(6,6)),6);
+dd1 = fitmagfrd((D(1,1)/D(5,5)),6);
+dd2 = fitmagfrd((D(2,2)/D(5,5)),6);
+dd3 = fitmagfrd((D(3,3)/D(5,5)),6);
+dd4 = fitmagfrd((D(4,4)/D(5,5)),6);
 Dscale=minreal(append(dd1, dd2,dd3, dd4,tf(eye(4))));
 [K2,CL,GAM2,INFO] = hinfsyn(minreal(Dscale*P*inv(Dscale)),2,2);
 end
