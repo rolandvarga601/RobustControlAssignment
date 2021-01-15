@@ -1,8 +1,6 @@
 %% Load data
 load('..\Assignment_Data_SC42145.mat')
-%% Define the uncertainty block
-%ASK
-blk=[ 1 1; 1 1; 1 1; 1 1];
+
 %% Part 1
 s=tf('s');
 
@@ -14,6 +12,7 @@ Wo2=(0.05*s+0.2)/(0.01*s+1);
 
 Wo=[Wo1 0; 0 Wo2];
 Wi=[Wi1 0; 0 Wi2];
+
 %Define Performance Weigths
 % Output error weight
 wb=0.4*2*pi; 
@@ -21,13 +20,10 @@ A=10^-4;
 M=1.8;
 Wp11=((s/M)+wb)/(s+wb*A);
 Wp=[Wp11 0; 0 0.2];
-%bode(Wp11)
 
 % Control input weight
 Wu=[0.01 0;...
 0 (5*(10^-3)*s^2+7*(10^-4)*s+5*(10^-5))/(s^2+14*10^-4*s+10^-6)];
-
-%% Part 2
 
 %% Part 3
 
@@ -77,6 +73,7 @@ P=minreal(P);
 %% Part 5
 %Load Controller designed in PART2
 load('ControllerPart2.mat')
+Kn = K;
 
 % Remember to do comments on mu!!!!!!!!
 N=minreal(lft(P,K));
@@ -148,8 +145,13 @@ Punc=lft(D,P);
 %Punc=lft(P,D);
 opt=dkitopt('FrequencyVector', omega,'DisplayWhileAutoIter','on')
 % opt=dkitopt('DisplayWhileAutoIter','on');
-[Ki1,clp,bnd,dkinfo]=dksyn(Punc,2,2,opt);
+[K2,clp,bnd,dkinfo]=dksyn(Punc,2,2,opt);
 % [Ki1,clp,dkinfo]=musyn(Punc,2,2,K);
+
+%%
+for i = 1:1:size(dkinfo,2)
+    dkinfo_peakmu(i) = dkinfo{1,i}.Bnd;
+end
 
 %% Manual D-K Iteration
 
@@ -168,19 +170,26 @@ opt=dkitopt('FrequencyVector', omega,'DisplayWhileAutoIter','on')
 %  blk=[ 1 1; 1 1;  1 1; 1 1; 2 2];
 [K2,CL,GAM,INFO] = hinfsyn(P,2,2);
 
-for i=1:1:10
+for i=1:1:8
 Nf=frd(lft(P,K2),omega);
 [mubnds,muinfo]=mussv(Nf,blk,'c');
 muRP=mubnds(:,1);
 [muRPinf(i), muRPw]=norm(muRP,inf);
 [VDelta,VSigma,VLmi] = mussvextract(muinfo);
-D=VSigma.DLeft;
-dd1 = fitmagfrd((D(1,1)/D(5,5)),6);
-dd2 = fitmagfrd((D(2,2)/D(5,5)),6);
-dd3 = fitmagfrd((D(3,3)/D(5,5)),6);
-dd4 = fitmagfrd((D(4,4)/D(5,5)),6);
-Dscale=minreal(append(dd1, dd2,dd3, dd4,tf(eye(4))));
-[K2,CL,GAM2,INFO] = hinfsyn(minreal(Dscale*P*inv(Dscale)),2,2);
+Dleft=VSigma.DLeft;
+dd1 = fitmagfrd((Dleft(1,1)/Dleft(5,5)),6);
+dd2 = fitmagfrd((Dleft(2,2)/Dleft(5,5)),6);
+dd3 = fitmagfrd((Dleft(3,3)/Dleft(5,5)),6);
+dd4 = fitmagfrd((Dleft(4,4)/Dleft(5,5)),6);
+DL=minreal(append(dd1, dd2,dd3, dd4,tf(eye(6))));
+
+Dright=VSigma.DRight;
+dd1 = fitmagfrd((Dright(1,1)/Dright(5,5)),6);
+dd2 = fitmagfrd((Dright(2,2)/Dright(5,5)),6);
+dd3 = fitmagfrd((Dright(3,3)/Dright(5,5)),6);
+dd4 = fitmagfrd((Dright(4,4)/Dright(5,5)),6);
+DR=minreal(append(dd1, dd2,dd3, dd4,tf(eye(4))));
+[K2,CL,GAM2,INFO] = hinfsyn(minreal(DL*P*inv(DR)),2,2);
 end
 
 %% Time-domain Simulation
@@ -188,26 +197,90 @@ end
 Kex=[K2 zeros(2,1);0 0 1];
 sys_fb = feedback(FWT*Kex,eye(2),[1 2],[1 2]);
 
+% Nominal controller
+Kexn=[Kn zeros(2,1);0 0 1];
+sys_fb_n = feedback(FWT*Kexn,eye(2),[1 2],[1 2]);
+
 % System response to step in omega reference
 figure()
-step(sys_fb(1,1))
+step(sys_fb_n(1,1),sys_fb(1,1))
+lgd = legend('Nominal controller','Robust controller');
+lgd.Location = 'southeast';
 
 % Transfer matrix from reference input to control signal output
 sys_fb_control = feedback(Kex,FWT,[1 2],[1 2 3]);
 
+sys_fb_control_n = feedback(Kexn,FWT,[1 2],[1 2 3]);
+
 % Control inputs in case of step in omega reference
 figure()
-step(sys_fb_control(1,1))
+step(sys_fb_control_n(1,1), sys_fb_control(1,1))
 figure()
-step(sys_fb_control(2,1))
+step(sys_fb_control_n(2,1), sys_fb_control(2,1))
 
 %% Simulation - disturbance rejection
 % System response to step in the disturbance
 figure()
-step(sys_fb(1,3))
+step(sys_fb_n(1,3), sys_fb(1,3))
 
 % Control input response to step in the disturbance
 figure()
-step(sys_fb_control(1,3))
+step(sys_fb_control_n(1,3),sys_fb_control(1,3))
 figure()
-step(sys_fb_control(2,3))
+step(sys_fb_control_n(2,3),sys_fb_control(2,3))
+
+%% Time-domain Simulation -- Uncertain
+% Extends the original system with a direct feedthrough for the V
+Kex=[K2 zeros(2,1);0 0 1];
+sys_fb = feedback(usys_w*Kex,eye(2),[1 2],[1 2]);
+
+% Nominal controller
+Kexn=[Kn zeros(2,1);0 0 1];
+sys_fb_n = feedback(usys_w*Kexn,eye(2),[1 2],[1 2]);
+
+% System response to step in omega reference
+figure()
+step(sys_fb_n(1,1),sys_fb(1,1))
+lgd = legend('Nominal controller','Robust controller');
+lgd.Location = 'southeast';
+
+% Transfer matrix from reference input to control signal output
+sys_fb_control = feedback(Kex,usys_w,[1 2],[1 2 3]);
+
+sys_fb_control_n = feedback(Kexn,usys_w,[1 2],[1 2 3]);
+
+% Control inputs in case of step in omega reference
+figure()
+step(sys_fb_control_n(1,1), sys_fb_control(1,1))
+figure()
+step(sys_fb_control_n(2,1), sys_fb_control(2,1))
+
+%% Time-domain Simulation -- Uncertain
+% System response to step in the disturbance
+figure()
+step(sys_fb_n(1,3), sys_fb(1,3))
+
+% Control input response to step in the disturbance
+figure()
+step(sys_fb_control_n(1,3),sys_fb_control(1,3))
+figure()
+step(sys_fb_control_n(2,3),sys_fb_control(2,3))
+
+%%
+sens_func_n = feedback(eye(2),G*Kn,[1 2],[1 2]);
+sens_func = feedback(eye(2),G*K2,[1 2],[1 2]);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
